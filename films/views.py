@@ -4,10 +4,12 @@ from django.contrib.auth.views import LoginView
 from django.urls import reverse_lazy
 from django.views.generic import FormView, TemplateView
 from django.contrib.auth import get_user_model
-from films.models import Film
+from films.models import Film, UserFilms
 from django.views.generic.list import ListView
 
 from films.forms import RegisterForm
+from films.utils import get_max_order
+
 
 # Create your views here.
 class IndexView(TemplateView):
@@ -32,7 +34,7 @@ class FilmList(ListView):
 
     def get_queryset(self):
         user = self.request.user
-        return user.films.all()
+        return UserFilms.objects.filter(user=self.request.user)
 
 def check_username(request):
     username = request.POST.get("username")
@@ -42,14 +44,32 @@ def check_username(request):
 
 def add_film(request):
     name=request.POST.get("filmname")
-    film = Film.objects.create(name=name)
-    request.user.films.add(film)
+    film, _ = Film.objects.get_or_create(name=name)
 
-    films = request.user.films.all()
+    if not UserFilms.objects.filter(film=film, user=request.user).exists():
+        UserFilms.objects.create(
+            film=film, 
+            user=request.user, 
+            order=get_max_order(request.user)
+        )
+
+    films = UserFilms.objects.filter(user=request.user)
     return render(request, 'partials/film-list.html', {'films':films})
 
 def delete_film(request, pk):
-    request.user.films.remove(pk)
+    UserFilms.objects.get(pk=pk).delete()
 
-    films = request.user.films.all()
+    films = UserFilms.objects.filter(user=request.user)
+    return render(request, 'partials/film-list.html', {'films':films})
+
+
+def sort_film(request):
+    film_pk_order = request.POST.getlist('film_order')
+    films = []
+    for idx, film_pk in enumerate(film_pk_order, start=1):
+        userfilm = UserFilms.objects.get(pk=film_pk)
+        userfilm.order = idx
+        userfilm.save()
+        films.append(userfilm)
+
     return render(request, 'partials/film-list.html', {'films':films})
