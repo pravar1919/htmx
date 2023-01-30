@@ -4,6 +4,8 @@ from django.contrib.auth.views import LoginView
 from django.urls import reverse_lazy
 from django.views.generic import FormView, TemplateView
 from django.contrib.auth import get_user_model
+from films.models import Film
+from django.views.generic.list import ListView
 
 from films.forms import RegisterForm
 
@@ -23,9 +25,31 @@ class RegisterView(FormView):
         form.save()  # save the user
         return super().form_valid(form)
 
+class FilmList(ListView):
+    template_name = 'films.html'
+    model = Film
+    context_object_name = 'films'
+
+    def get_queryset(self):
+        user = self.request.user
+        return user.films.all()
 
 def check_username(request):
     username = request.POST.get("username")
     if get_user_model().objects.filter(username=username).exists():
         return HttpResponse("<div style='color:red;'>Username is not Available</div>")
     return HttpResponse("<div style='color:green;'>Username is Available</div>")
+
+def add_film(request):
+    name=request.POST.get("filmname")
+    film = Film.objects.create(name=name)
+    request.user.films.add(film)
+
+    films = request.user.films.all()
+    return render(request, 'partials/film-list.html', {'films':films})
+
+def delete_film(request, pk):
+    request.user.films.remove(pk)
+
+    films = request.user.films.all()
+    return render(request, 'partials/film-list.html', {'films':films})
